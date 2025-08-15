@@ -1,0 +1,76 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Redline Agent</title>
+    <style>
+      body{font-family:ui-sans-serif,system-ui,Arial;margin:40px;}
+      .card{max-width:720px;margin:auto;padding:24px;border:1px solid #ddd;border-radius:16px;box-shadow:0 6px 20px rgba(0,0,0,.06)}
+      .row{display:flex;gap:12px;align-items:center}
+      .btn{padding:10px 16px;border:0;border-radius:10px;background:#111;color:#fff;cursor:pointer}
+      .muted{color:#666}
+      img{max-width:100%;border:1px solid #eee;border-radius:12px}
+      code{background:#f7f7f7;padding:2px 6px;border-radius:6px}
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Redline Agent</h1>
+      <p class="muted">Upload a <code>.dxf</code>, then run review. AI can be toggled.</p>
+      <div class="row">
+        <input type="file" id="file" accept=".dxf" />
+        <button class="btn" onclick="upload()">Upload</button>
+        <label><input type="checkbox" id="staticRules" checked/> Static rules</label>
+        <label><input type="checkbox" id="ai" checked/> AI</label>
+        <button class="btn" onclick="review()">Review</button>
+      </div>
+      <pre id="log"></pre>
+      <div id="preview"></div>
+    </div>
+
+    <script>
+      let fileName = null;
+      const log = (t) => document.getElementById('log').textContent = t;
+
+      async function upload(){
+        const f = document.getElementById('file').files[0];
+        if(!f){ alert('Pick a .dxf first'); return; }
+        const fd = new FormData();
+        fd.append('file', f);
+        const r = await fetch('/api/upload', { method: 'POST', body: fd });
+        const j = await r.json();
+        if(r.ok){ fileName = j.file_name; log('Uploaded: '+fileName); }
+        else{ log('Error: '+(j.detail||JSON.stringify(j))); }
+      }
+
+      async function review(){
+        if(!fileName){ alert('Upload first'); return; }
+        const body = { file_name: fileName, ai: document.getElementById('ai').checked, static_rules: document.getElementById('staticRules').checked };
+        const r = await fetch('/api/review', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify(body) });
+        const j = await r.json();
+        if(!r.ok){ log('Error: '+(j.detail||JSON.stringify(j))); return; }
+        log(JSON.stringify(j, null, 2));
+        const box = document.getElementById('preview');
+        box.innerHTML = '';
+        if(j.preview_png){
+          const img = document.createElement('img');
+          img.src = j.preview_png; box.appendChild(img);
+        }
+        if(j.annotated_dxf){
+          const a = document.createElement('a');
+          a.textContent = 'Download annotated DXF';
+          a.href = j.annotated_dxf; a.download = '';
+          box.appendChild(a);
+        }
+        if(j.preview_pdf){
+          const a2 = document.createElement('a');
+          a2.textContent = 'Download PDF preview';
+          a2.href = j.preview_pdf; a2.download = '';
+          box.appendChild(document.createElement('br'));
+          box.appendChild(a2);
+        }
+      }
+    </script>
+  </body>
+</html>
